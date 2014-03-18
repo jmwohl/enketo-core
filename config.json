@@ -14,7 +14,13 @@
         "enketo-widget/select-likert/likertitem"
     ],
     "tile": {
-        "layer": "http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png",
-        "attribution": "Map data &copy; <a href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
+        "dynamic": {
+            "source": "https://{s}.tiles.mapbox.com/v3/examples.map-vyofok3q/{z}/{x}/{y}.png",
+            "attribution": "Map data &copy; <a href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
+        },
+        "static": {
+            "source": "https://api.tiles.mapbox.com/v3/examples.map-vyofok3q/{lon},{lat},{z}/{width}x{height}.png",
+            "attribution": "Map data &copy; <a href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
+        }
     }
 }
