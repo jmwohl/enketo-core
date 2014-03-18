@@ -14,15 +14,26 @@
  * limitations under the License.
  */
 
-define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
-    function( $, Widget, configStr ) {
+define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
+    function( $, Widget, configStr, L ) {
         "use strict";
 
-        var gmapsDone,
-            deferred = $.Deferred(),
-            gmapsLoadStarted = false,
-            pluginName = 'geopointpicker',
-            config = JSON.parse( configStr );
+        var pluginName = 'geopointpicker',
+            config = JSON.parse( configStr ),
+            defaultZoom = 15,
+            tile = config.tile || {
+                "dynamic": {
+                    "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
+                    "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+                },
+                "static": {
+                    "source": 'http://api.tiles.mapbox.com/v3/undp.map-6grwd0n3/{lon},{lat},{z}/{width}x{height}.png',
+                    "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+                }
+            },
+            placeMarkerIcon = L.divIcon( {
+                className: 'enketo-placemarker'
+            } );
 
         /**
          * Geopoint widget Class
@@ -38,38 +49,29 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
             // call the super class constructor
             Widget.call( this, element, options );
 
-            // Only load the gmaps script if the widget is instantiated for the first time
-            // So if the form does not have a geopoint input the script will never be loaded.
-            if ( !gmapsDone ) {
-                deferred.done( function() {
-                    that._init();
-                } );
-                if ( !gmapsLoadStarted ) {
-                    require( [ 'enketo-widget/geopoint/gmapsDone' ], function( gDone ) {
-                        gmapsDone = gDone;
-                        deferred.resolve();
-                    } );
-                    gmapsLoadStarted = true;
-                }
-            } else {
-                this._init();
-            }
+            this._init();
         }
 
-        //copy the prototype functions from the Widget super class
+        // copy the prototype functions from the Widget super class
         Geopointpicker.prototype = Object.create( Widget.prototype );
 
-        //ensure the constructor is the new one
+        // ensure the constructor is the new one
         Geopointpicker.prototype.constructor = Geopointpicker;
 
+        /**
+         * Initializes the picker
+         */
         Geopointpicker.prototype._init = function() {
-            var inputVals, lt, lg, al, ac,
-                that = this;
+            var inputVals, lt, lg, al, ac, autoLocate,
+                that = this,
+                defaultLatLng = [ 16.8164 - 3.0171 ];
 
+            this.mapId = Math.round( Math.random() * 10000000 );
+            this.props = this._getProps();
             this._addDomElements();
 
-            inputVals = this.$inputOrigin.val().split( ' ' );
-            this._updateMapFn = "_updateDynamicMap";
+            // if empty inputVals = [""] so has length 1!
+            inputVals = $( this.element ).val().split( ' ' );
 
             this.$widget.find( 'input:not([name="search"])' ).on( 'change change.bymap change.bysearch', function( event ) {
                 var lat = ( that.$lat.val() !== '' ) ? that.$lat.val() : 0.0,
@@ -80,64 +82,56 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
 
                 event.stopImmediatePropagation();
 
-                that.$inputOrigin.val( value ).trigger( 'change' );
+                $( that.element ).val( value ).trigger( 'change' );
 
-                gmapsDone( function() {
-                    if ( event.namespace !== 'bymap' && event.namespace !== 'bysearch' ) {
-                        that._updateMap( lat, lng );
-                    }
+                if ( event.namespace !== 'bymap' && event.namespace !== 'bysearch' ) {
+                    that._placeMarker( [ lat, lng ] );
+                    that._updateMap( [ lat, lng ] );
+                }
 
-                    if ( event.namespace !== 'bysearch' && this.$search ) {
-                        that.$search.val( '' );
-                    }
-                } );
-
+                if ( event.namespace !== 'bysearch' && that.$search ) {
+                    that.$search.val( '' );
+                }
             } );
 
             this.$widget.on( 'focus blur', 'input', function( event ) {
-                that.$inputOrigin.trigger( event.type );
+                $( that.element ).trigger( event.type );
             } );
 
-            if ( !this.options.touch ) {
-                gmapsDone( function() {
-                    if ( that._dynamicMapAvailable() ) {
-                        that._updateMap( 0, 0, 1 );
-                        if ( that.$search ) {
-                            that._enableSearch();
-                        }
-                    }
-                } );
-            } else if ( this.$map ) {
-                this._updateMapFn = "_updateStaticMap";
-                this._updateMap( 0, 0, 1 );
-                $( window ).on( 'resize', function() {
-                    var resizeCount = $( window ).data( 'resizecount' ) || 0;
-                    resizeCount++;
-                    $( window ).data( 'resizecount', resizeCount );
-                    window.setTimeout( function() {
-                        if ( resizeCount == $( window ).data( 'resizecount' ) ) {
-                            $( window ).data( 'resizecount', 0 );
-                            //do all the things when resizing stops
-                            that._updateMap();
-                        }
-                    }, 500 );
-                } );
+            if ( this.props.search ) {
+                this._enableSearch();
             }
 
-            lt = inputVals[ 0 ] || null;
-            lg = inputVals[ 1 ] || null;
-            al = inputVals[ 2 ] || null;
-            ac = inputVals[ 3 ] || null;
-
-            if ( lt && lg ) {
-                this._updateInputs( lt, lg, al, ac, 'change' );
-            }
-
-            if ( this.$detect ) {
+            if ( this.props.detect ) {
                 this._enableDetection();
+            }
+
+            if ( inputVals.length < 2 && this.props.detect ) {
+                navigator.geolocation.getCurrentPosition( function( position ) {
+                    that._updateMap( [ position.coords.latitude, position.coords.longitude ] );
+                } );
+            } else if ( inputVals.length > 1 ) {
+                this._updateInputs( inputVals, 'change' );
+                this._updateMap( inputVals );
+            } else {
+                this._updateMap( defaultLatLng );
             }
         };
 
+        Geopointpicker.prototype._getProps = function() {
+            var props = {};
+
+            props.search = !this.options.touch;
+            props.detect = !! navigator.geolocation;
+            props.map = this.options.touch !== true || ( this.options.touch === true && $( this.element ).closest( '.or-appearance-maps' ).length > 0 );
+            props.updateMapFn = ( props.map ) ? ( ( this.options.touch ) ? "_updateStaticMap" : "_updateDynamicMap" ) : null;
+
+            return props;
+        };
+
+        /**
+         * Adds the DOM elements
+         */
         Geopointpicker.prototype._addDomElements = function() {
             var detect =
                 '<button name="geodetect" type="button" class="btn btn-default" title="detect current location" data-placement="top">' +
@@ -147,10 +141,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
                     '<input class="geo ignore form-control" name="search" type="text" placeholder="search for place or address" disabled="disabled"/>' +
                     '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +
                     '</div>',
-                map = '<div class="map-canvas-wrapper"><div class="map-canvas"></div></div>';
+                map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>';
 
-            this.$inputOrigin = $( this.element );
-            this.$form = this.$inputOrigin.closest( 'form' );
             this.$widget = $(
                 '<div class="geopoint widget">' +
                 '<div class="search-bar no-search-input no-map"></div>' +
@@ -163,18 +155,18 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
                 '</div>'
             );
 
-            //if geodetection is supported, add the button
-            if ( navigator.geolocation ) {
+            // if geodetection is supported, add the button
+            if ( this.props.detect ) {
                 this.$widget.find( '.search-bar' ).append( detect );
                 this.$detect = this.$widget.find( 'button[name="geodetect"]' );
             }
-            //if not on a mobile device, add the search field
-            if ( this.options.touch !== true ) {
+            // if not on a mobile device, add the search field
+            if ( this.props.search ) {
                 this.$widget.find( '.search-bar' ).removeClass( 'no-search-input' ).append( search );
                 this.$search = this.$widget.find( '[name="search"]' );
             }
-            //if not on a mobile device or specifically requested, add the map canvas
-            if ( this.options.touch !== true || ( this.options.touch === true && this.$inputOrigin.parents( '.or-appearance-maps' ).length > 0 ) ) {
+            // if not on a mobile device or specifically requested, add the map canvas
+            if ( this.props.map ) {
                 this.$widget.find( '.search-bar' ).removeClass( 'no-map' ).after( map );
                 this.$map = this.$widget.find( '.map-canvas' );
             }
@@ -184,7 +176,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
             this.$alt = this.$widget.find( '[name="alt"]' );
             this.$acc = this.$widget.find( '[name="acc"]' );
 
-            this.$inputOrigin.hide().after( this.$widget ).parent().addClass( 'clearfix' );
+            $( this.element ).hide().after( this.$widget ).parent().addClass( 'clearfix' );
         };
 
         /**
@@ -195,8 +187,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
             this.$detect.click( function( event ) {
                 event.preventDefault();
                 navigator.geolocation.getCurrentPosition( function( position ) {
-                    that._updateMap( position.coords.latitude, position.coords.longitude );
-                    that._updateInputs( position.coords.latitude, position.coords.longitude, position.coords.altitude, position.coords.accuracy );
+                    that._updateMap( [ position.coords.latitude, position.coords.longitude ] );
+                    that._updateInputs( [ position.coords.latitude, position.coords.longitude, position.coords.altitude, position.coords.accuracy ] );
                 } );
                 return false;
             } );
@@ -206,161 +198,172 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config' ],
          * Enables search functionality using the Google Maps API v3
          */
         Geopointpicker.prototype._enableSearch = function() {
-            var geocoder = new google.maps.Geocoder(),
-                that = this;
-            this.$search.prop( 'disabled', false );
-            this.$search.on( 'change', function( event ) {
-                event.stopImmediatePropagation();
-                //console.debug('search field click event');
-                var address = $( this ).val();
-                if ( typeof geocoder !== 'undefined' ) {
-                    geocoder.geocode( {
-                            'address': address,
-                            'bounds': that.map.getBounds()
-                        },
-                        function( results, status ) {
-                            if ( status == google.maps.GeocoderStatus.OK ) {
-                                that.$search.attr( 'placeholder', 'search' );
-                                var loc = results[ 0 ].geometry.location;
-                                //console.log(loc);
-                                that._updateMap( loc.lat(), loc.lng() );
-                                that._updateInputs( loc.lat(), loc.lng(), null, null, 'change.bysearch' );
+            var that = this;
+
+            this.$search
+                .prop( 'disabled', false )
+                .on( 'change', function( event ) {
+                    var address = $( this ).val();
+                    event.stopImmediatePropagation();
+
+                    if ( address ) {
+                        $.get( "http://nominatim.openstreetmap.org/search/" + address + "?format=json", function( response ) {
+                            var location = response[ 0 ] || null;
+                            if ( location && location.lat && location.lon ) {
+                                that._placeMarker( [ location.lat, location.lon ] );
+                                that._updateMap( [ location.lat, location.lon ] );
+                                that._updateInputs( [ location.lat, location.lon ], 'change.bysearch' );
+                                that.$search.closest( '.input-group' ).removeClass( 'has-error' );
                             } else {
-                                that.$search.val( '' );
-                                that.$search.attr( 'placeholder', address + ' not found, try something else.' );
+                                //TODO: add error message
+                                that.$search.closest( '.input-group' ).addClass( 'has-error' );
+                                console.log( "Location '" + address + "' not found" );
                             }
-                        }
-                    );
-                }
-                return false;
-            } );
+                        }, 'json' )
+                            .fail( function() {
+                                //TODO: add error message
+                                that.$search.closest( '.input-group' ).addClass( 'has-error' );
+                                console.log( "Error. Geocoding service may not be available or app is offline" );
+                            } )
+                            .always( function() {
+
+                            } );
+                    } else {
+
+                    }
+                } );
+        };
+
+        /**
+         * Empties all inputs, sets map to 0,0, clears value in original input
+         */
+        Geopointpicker.prototype._reset = function() {
+
         };
 
         /**
          * Whether google maps are available (whether scripts have loaded).
          */
         Geopointpicker.prototype._dynamicMapAvailable = function() {
-            return ( this.$map && typeof google !== 'undefined' && typeof google.maps !== 'undefined' );
+            return !!this.map;
         };
 
         /**
          * Calls the appropriate map update function.
          *
-         * @param  {number=} lat  latitude
-         * @param  {number=} lng  longitude
-         * @param  {number=} zoom zoom level which defaults to 15
+         * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
+         * @param  {number=} zoom zoom level
          */
-        Geopointpicker.prototype._updateMap = function( lat, lng, zoom ) {
-            if ( !this.$map ) {
+        Geopointpicker.prototype._updateMap = function( latLng, zoom ) {
+            if ( !this.props.map ) {
                 return;
             }
-            lat = lat || Number( this.$lat.val() );
-            lng = lng || Number( this.$lng.val() );
-            zoom = zoom || 15;
-            if ( lat === 0 && lng === 0 ) zoom = 1;
-            return this[ this._updateMapFn ]( lat, lng, zoom );
+
+            if ( !zoom ) {
+                if ( this.map ) {
+                    // note: there are conditions where getZoom returns undefined!
+                    zoom = this.map.getZoom() || defaultZoom;
+                } else {
+                    zoom = defaultZoom;
+                }
+            }
+
+            return this[ this.props.updateMapFn ]( latLng, zoom );
         };
 
         /**
          * Loads a static map with placemarker. Does not use Google Maps v3 API (uses Static Maps API instead)
          *
-         * @param  {number} lat  latitude
-         * @param  {number} lng  longitude
-         * @param  {number} zoom default zoom level is 15
+         * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
+         * @param  {number} zoom zoom level
          */
-        Geopointpicker.prototype._updateStaticMap = function( lat, lng, zoom ) {
-            var params,
-                width = Math.round( this.$map.width() ),
-                height = Math.round( this.$map.height() ),
-                apiKey = ( config.gmapsStaticApiKey ) ? '&key=' + config.gmapsStaticApiKey : '';
+        Geopointpicker.prototype._updateStaticMap = function( latLng, zoom ) {
+            var lat, lng, width, height;
 
-            params = "center=" + lat + "," + lng + "&size=" + width + "x" + height + "&zoom=" + zoom + "&sensor=false" + apiKey;
-            this.$map.empty().append( '<img src="https://maps.googleapis.com/maps/api/staticmap?' + params + '"/>' );
+            if ( !this.props.map ) {
+                return;
+            }
+
+            lat = latLng[ 0 ] || latLng.lat || 0;
+            lng = latLng[ 1 ] || latLng.lng || 0;
+            width = Math.round( this.$map.width() );
+            height = Math.round( this.$map.height() );
+
+            this.$map.empty().append(
+                '<img src="' + tile[ "static" ][ "source" ].replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>'
+            );
         };
 
         /**
          * Updates the dynamic (Maps API v3) map to show the provided coordinates (in the center), with the provided zoom level
          *
-         * @param  {number} lat  latitude
-         * @param  {number} lng  longitude
+         * @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number} zoom zoom
          */
-        Geopointpicker.prototype._updateDynamicMap = function( lat, lng, zoom ) {
-            var $map = this.$map,
-                that = this;
+        Geopointpicker.prototype._updateDynamicMap = function( latLng, zoom ) {
+            if ( this.map ) {
+                this.map.setView( latLng, zoom );
+            } else {
+                this.map = L.map( 'map' + this.mapId )
+                    .on( 'click', function( e ) {
+                        that._placeMarker( e.latlng );
+                        that._updateInputs( e.latlng, 'change.bymap' );
+                        that._updateMap( e.latlng );
+                    } );
 
-            if ( this._dynamicMapAvailable() && typeof google.maps.LatLng !== 'undefined' ) {
-                var mapOptions = {
-                    zoom: zoom,
-                    center: new google.maps.LatLng( lat, lng ),
-                    mapTypeId: google.maps.MapTypeId.ROADMAP,
-                    streetViewControl: false
-                };
-                this.map = new google.maps.Map( this.$map[ 0 ], mapOptions );
-                this._placeMarker();
-                // place marker where user clicks
-                google.maps.event.addListener( this.map, 'click', function( event ) {
-                    that._updateInputs( event.latLng.lat(), event.latLng.lng(), '', '', 'change.bymap' );
-                    that._placeMarker( event.latLng );
-                } );
+                L.tileLayer( tile[ "dynamic" ][ "source" ], {
+                    attribution: tile[ "dynamic" ][ "attribution" ],
+                    maxZoom: 18
+                } ).addTo( this.map );
             }
         };
 
         /**
          * Moves the existing marker to the provided coordinates or places a new one in the center of the map
          *
-         * @param  {Object.<string, number>=} latLng [description]
+         * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          */
         Geopointpicker.prototype._placeMarker = function( latLng ) {
-            var that;
+            var that = this;
+
+            if ( !this._dynamicMapAvailable() ) {
+                return;
+            }
+
             latLng = latLng || this.map.getCenter();
 
-            if ( typeof this.marker !== 'undefined' ) {
-                this.marker.setMap( null );
+            if ( !this.marker ) {
+                this.marker = L.marker( latLng, {
+                    icon: placeMarkerIcon,
+                    draggable: true
+                } ).addTo( this.map )
+                    .on( 'dragend', function( event ) {
+                        var latLng = event.target.getLatLng();
+                        that._updateInputs( latLng, 'change.bymap' );
+                        that._updateMap( latLng );
+                    } );
+            } else {
+                this.marker.setLatLng( latLng );
             }
 
-            this.marker = new google.maps.Marker( {
-                position: latLng,
-                map: this.map,
-                draggable: true
-            } );
-            that = this;
-
-            // dragging markers for non-touch screens
-            if ( !this.options.touch ) {
-                google.maps.event.addListener( this.marker, 'dragend', function() {
-                    that._updateInputs( that.marker.getPosition().lat(), that.marker.getPosition().lng(), '', '', 'change.bymap' );
-                    that._centralizeWithDelay();
-                } );
-                this._centralizeWithDelay( 5000 );
-            }
-
-            this._centralizeWithDelay( 0 );
+            //CENTRALIZE???
         };
 
-        /**
-         * Shifts the map so that the marker is in the center after a small delay.
-         */
-        Geopointpicker.prototype._centralizeWithDelay = function( delay ) {
-            var that = this;
-            window.setTimeout( function() {
-                that.map.panTo( that.marker.getPosition() );
-            }, delay );
-        };
 
         /**
          * Updates the (fake) input element for latitude, longitude, altitude and accuracy
          *
-         * @param  {number} lat [description]
-         * @param  {number} lng [description]
-         * @param  {?(string|number)} alt [description]
-         * @param  {?(string|number)} acc [description]
+         * @param  @param  {Array.<number>|{lat: number, lng: number, alt: number, acc: number}} coords latitude, longitude, altitude and accuracy
          * @param  {string=} ev  [description]
          */
-        Geopointpicker.prototype._updateInputs = function( lat, lng, alt, acc, ev ) {
-            alt = alt || '';
-            acc = acc || '';
+        Geopointpicker.prototype._updateInputs = function( coords, ev ) {
+            var lat = coords[ 0 ] || coords.lat || '',
+                lng = coords[ 1 ] || coords.lng || '',
+                alt = coords[ 2 ] || coords.alt || '',
+                acc = coords[ 3 ] || coords.acc || '';
+
             ev = ev || 'change';
+
             this.$lat.val( Math.round( lat * 10000 ) / 10000 );
             this.$lng.val( Math.round( lng * 10000 ) / 10000 );
             this.$alt.val( Math.round( alt * 10 ) / 10 );
