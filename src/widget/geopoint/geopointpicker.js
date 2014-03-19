@@ -290,7 +290,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             height = Math.round( this.$map.height() );
 
             this.$map.empty().append(
-                '<img src="' + tile[ "static" ][ "source" ].replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>'
+                '<img src="' + tile[ "static" ][ "source" ].replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>' +
+                '<div class="attribution">' + tile[ "static" ][ "attribution" ] + '</div>'
             );
         };
 

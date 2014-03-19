@@ -123,8 +123,15 @@
         border-radius: 3px;
         margin-top: 10px;
         height: $map-height;
+        position: relative;
         img {
             max-width: none;
+        }
+        .attribution {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            font-size: 10px;
         }
     }
 }
