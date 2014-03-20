@@ -1,0 +1,6 @@
+{
+    "name": "geotracepicker",
+    "stylesheet": "geotracepicker.scss",
+    "selector": "input[data-type-xml=\"geotrace\"]",
+    "options": {}
+}
