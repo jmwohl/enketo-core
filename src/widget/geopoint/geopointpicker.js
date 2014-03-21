@@ -32,7 +32,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 }
             },
             placeMarkerIcon = L.divIcon( {
-                className: 'enketo-placemarker'
+                iconSize: 24,
+                className: 'enketo-geopoint-marker'
             } );
 
         /**
@@ -62,7 +63,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * Initializes the picker
          */
         Geopointpicker.prototype._init = function() {
-            var inputVals, lt, lg, al, ac, autoLocate,
+            var inputVals,
                 that = this,
                 defaultLatLng = [ 16.8164 - 3.0171 ];
 
@@ -144,11 +145,11 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>';
 
             this.$widget = $(
-                '<div class="geopoint widget">' +
+                '<div class="geopicker widget">' +
                 '<div class="search-bar no-search-input no-map"></div>' +
                 '<div class="geo-inputs">' +
-                '<label class="geo">latitude (x.y &deg;)<input class="ignore" name="lat" type="number" step="0.0001" /></label>' +
-                '<label class="geo">longitude (x.y &deg;)<input class="ignore" name="long" type="number" step="0.0001" /></label>' +
+                '<label class="geo">latitude (x.y &deg;)<input class="ignore" name="lat" type="number" step="0.0001" min="-90" max="90" /></label>' +
+                '<label class="geo">longitude (x.y &deg;)<input class="ignore" name="long" type="number" step="0.0001" min="-180" max="180" /></label>' +
                 '<label class="geo">altitude (m)<input class="ignore" name="alt" type="number" step="0.1" /></label>' +
                 '<label class="geo">accuracy (m)<input class="ignore" name="acc" type="number" step="0.1" /></label>' +
                 '</div>' +
@@ -302,9 +303,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * @param  {number} zoom zoom
          */
         Geopointpicker.prototype._updateDynamicMap = function( latLng, zoom ) {
-            if ( this.map ) {
-                this.map.setView( latLng, zoom );
-            } else {
+            var that = this;
+
+            if ( !this.map ) {
                 this.map = L.map( 'map' + this.mapId )
                     .on( 'click', function( e ) {
                         that._placeMarker( e.latlng );
@@ -316,7 +317,11 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     attribution: tile[ "dynamic" ][ "attribution" ],
                     maxZoom: 18
                 } ).addTo( this.map );
+
+                // watch out, default "Leaflet" link clicks away from page, loosing all data
+                this.map.attributionControl.setPrefix( '' );
             }
+            this.map.setView( latLng, zoom );
         };
 
         /**
@@ -365,10 +370,10 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
 
             ev = ev || 'change';
 
-            this.$lat.val( Math.round( lat * 10000 ) / 10000 );
-            this.$lng.val( Math.round( lng * 10000 ) / 10000 );
-            this.$alt.val( Math.round( alt * 10 ) / 10 );
-            this.$acc.val( Math.round( acc * 10 ) / 10 ).trigger( ev );
+            this.$lat.val( Math.round( lat * 10000 ) / 10000 || '' );
+            this.$lng.val( Math.round( lng * 10000 ) / 10000 || '' );
+            this.$alt.val( Math.round( alt * 10 ) / 10 || '' );
+            this.$acc.val( Math.round( acc * 10 ) / 10 || '' ).trigger( ev );
         };
 
         Geopointpicker.prototype.disable = function() {
