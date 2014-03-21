@@ -95,8 +95,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             console.log( 'points', this.points );
 
             this.$widget.find( 'input:not([name="search"])' ).on( 'change change.bymap change.bysearch', function( event ) {
-                var changed,
-                    lat = that.$lat.val() ? Number( that.$lat.val() ) : "",
+                var lat = that.$lat.val() ? Number( that.$lat.val() ) : "",
                     lng = that.$lng.val() ? Number( that.$lng.val() ) : "",
                     // we need to avoid a missing alt in case acc is not empty!
                     alt = that.$alt.val() ? Number( that.$alt.val() ) : "",
@@ -105,11 +104,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 event.stopImmediatePropagation();
 
                 that._editPoint( [ lat, lng, alt, acc ] );
-                changed = that._updateValue();
-
-                if ( changed ) {
-                    that._updateMap();
-                }
 
                 if ( event.namespace !== 'bysearch' && that.$search ) {
                     that.$search.val( '' );
@@ -122,10 +116,10 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             } );
 
             this.$points.find( '.addpoint' ).on( 'click', function() {
-                that._addPointBtn( that.points.length + 1 );
-                that.points.push( [] );
-                that._setCurrent( that.points.length - 1 );
-                that._updateValue();
+                that._addPoint();
+                return false;
+            } ).end().find( '.close-chain' ).on( 'click', function() {
+                that._closePolygon();
                 return false;
             } );
 
@@ -157,7 +151,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     that._addPointBtn( i + 1 );
                 } );
             } else {
-                this.$points.find( '.addpoint' ).click();
+                this._addPoint();
             }
 
             // setting map location on load
@@ -212,7 +206,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +
                     '</div>',
                 map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>',
-                points = '<div class="points btn-group"><a href="#" class="addpoint btn btn-primary">+</a></div>';
+                points = '<div class="points btn-group"><button class="addpoint btn btn-default"><span class="glyphicon glyphicon-plus"> </span></button></div>',
+                close = '<button class="close-chain btn btn-success"><span class="glyphicon glyphicon-link"> </span></button>';
 
             this.$widget = $(
                 '<div class="geopicker widget">' +
@@ -245,6 +240,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             // if points bar is required
             if ( this.props.type !== 'geopoint' ) {
                 this.$points = $( points );
+                if ( this.props.type === 'geoshape' ) {
+                    this.$points.append( close );
+                }
                 this.$widget.prepend( this.$points );
             } else {
                 this.$points = $();
@@ -340,7 +338,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             var that = this;
 
             return latLngs.every( function( latLng, index, array ) {
-                return that._isValidLatLng( latLng ) || ( index === array.length - 1 );
+                return that._isValidLatLng( latLng ) || ( latLng.join() === '' && index === array.length - 1 );
             } );
         };
 
@@ -401,7 +399,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     that._updateInputs( [ position.coords.latitude, position.coords.longitude, position.coords.altitude, position.coords.accuracy ] );
                     // if current index is last of points, automatically create next point
                     if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
-                        that.$points.find( '.addpoint' ).click();
+                        that._addPoint();
                     }
                 } );
                 return false;
@@ -534,7 +532,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                             // if current index is last of points, automatically create next point
                             // except if type = geopoint
                             if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
-                                that.$points.find( '.addpoint' ).click();
+                                that._addPoint();
                             }
                         }
                     } );
@@ -605,9 +603,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             if ( markers.length > 0 ) {
                 this.markerLayer = L.layerGroup( markers ).addTo( this.map );
                 // change the view to fit all the markers
-                // this is important when no polyline can be drawn (because a point is invalid)
-                // DISABLED except for geopoint, CAUSING ISSUE WITH INCORRECT MARKER PLACEMENT
-                if ( this.props.type === 'geopoint' ) {
+                // don't use this for multiple markers, it messed up map clicks to place points
+                if ( this.points.length === 1 ) {
                     this.map.fitBounds( coords );
                 }
             }
@@ -628,12 +625,36 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             console.log( 'updating polyline' );
             if ( this.points.length < 2 || !this._isValidLatLngList( this.points ) ) {
                 // remove quirky line remainder
-                if ( this.polyline && this.map ) {
-                    this.map.removeLayer( this.polyline );
+                if ( this.map ) {
+                    if ( this.polyline ) {
+                        this.map.removeLayer( this.polyline );
+                    }
+                    if ( this.polygon ) {
+                        this.map.removeLayer( this.polygon );
+                    }
                 }
                 this.polyline = null;
+                this.polygon = null;
                 console.log( 'list of points invalid' );
                 return;
+            }
+
+            // polyline and polygon are mutually exclusive
+            if ( this._isPolygon( this.points ) ) {
+                console.log( 'detected that this polyline is a polygon' );
+                if ( this.polyline ) {
+                    if ( this.map ) {
+                        this.map.removeLayer( this.polyline );
+                    }
+                    this.polyline = null;
+                }
+                this._updatePolygon();
+                return;
+            } else if ( this.polygon ) {
+                if ( this.map ) {
+                    this.map.removeLayer( this.polygon );
+                }
+                this.polygon = null;
             }
 
             polylinePoints = ( this.points[ this.points.length - 1 ].join( '' ) !== '' ) ? this.points : this.points.slice( 0, this.points.length - 1 );
@@ -649,17 +670,65 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             console.log( 'done updating polyline' );
         };
 
+
+        /**
+         * Updates the polygon on the dynamic map from the current list of points.
+         * A polygon is a type of polyline. This function is ALWAYS called by _updatePolyline.
+         */
+        Geopicker.prototype._updatePolygon = function() {
+
+            if ( this.props.type === 'geopoint' ) {
+                return;
+            }
+
+            console.log( 'updating polygon' );
+
+            if ( !this.polygon ) {
+                console.log( 'creating new polygon' );
+                this.polygon = L.polygon( this.points, {
+                    color: 'red'
+                } ).addTo( this.map );
+            } else {
+                console.log( 'updating existing polygon', this.polygon );
+                this.polygon.setLatLngs( this.points );
+            }
+            this.map.fitBounds( this.polygon.getBounds() );
+            console.log( 'done updating polygon' );
+        };
+
+        Geopicker.prototype._isPolygon = function( latLngs ) {
+            // no need to check for validaty of latLngs. This already happened in _updatePolyline.
+            return this.props.type === 'geoshape' && latLngs.length >= 4 && JSON.stringify( latLngs[ 0 ] ) === JSON.stringify( latLngs[ latLngs.length - 1 ] );
+        };
+
+
+        Geopicker.prototype._addPoint = function() {
+            this._addPointBtn( this.points.length + 1 );
+            this.points.push( [] );
+            this._setCurrent( this.points.length - 1 );
+            this._updateValue();
+        };
+
         /**
          * Edits a point in the list of points
          * @param  {Array.<number>|{lat: number, lng: number, alt: number, acc: number}} latLng LatLng object or array
          * @return {Boolean]}        Whether point changed.
          */
         Geopicker.prototype._editPoint = function( latLng ) {
-            var oldVal = this.points[ this.currentIndex ].join();
+            var changed,
+                oldVal = this.points[ this.currentIndex ];
             this.points[ this.currentIndex ] = latLng;
             // this comparison is not completely accurate
             // e.g. [50,1] should be equal to {lat: 50, lng: 1}
-            return oldVal !== latLng.join();
+            // but this should not cause errors
+            //return JSON.stringify( oldVal ) !== JSON.stringify( latLng );
+
+            changed = this._updateValue();
+
+            if ( changed ) {
+                this._updateMap();
+            }
+            return changed;
         };
 
         /**
@@ -676,6 +745,28 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             this._setCurrent( newIndex );
             // this will call updateMarkers for the second time which is not so efficient
             this._updateMap();
+        };
+
+        Geopicker.prototype._closePolygon = function() {
+            var lastPoint = this.points[ this.points.length - 1 ];
+            console.log( 'closing polygon' );
+            // check if chain can be closed
+            if ( this.points.length < 3 || ( this.points.length === 3 && !this._isValidLatLng( this.points[ 2 ] ) ) || ( JSON.stringify( this.points[ 0 ] ) === JSON.stringify( lastPoint ) ) ) {
+                return;
+            }
+
+            // determine which point the make the closing point
+            // if the last point is not a valid point, assume the user wants to use this to close
+            // otherwise create a new point.
+            if ( !this._isValidLatLng( lastPoint ) ) {
+                console.log( 'current last point is not a valid point, so will use this as closing point' );
+                this.currentIndex = this.points.length - 1;
+            } else {
+                console.log( 'current last point is valid, so will create a new one to use to close' );
+                this._addPoint();
+            }
+
+            this._updateInputs( this.points[ 0 ] );
         };
 
         /**
