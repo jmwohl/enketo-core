@@ -139,11 +139,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 }
             } );
 
-            // disabled this to allow partial values to be entered and avoid seeing a big
-            // error after the first point has been entered
-            //this.$widget.on( 'focus blur', 'input', function( event ) {
-            //    $( that.element ).trigger( event.type );
-            //} );
+            this.$widget.on( 'focus blur', 'input', function( event ) {
+                $( that.element ).trigger( event.type );
+            } );
 
             // enable search
             if ( this.props.search ) {
@@ -246,6 +244,11 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             $( this.element ).hide().after( this.$widget ).parent().addClass( 'clearfix' );
         };
 
+        /**
+         * Updates the value in the original input element.
+         *
+         * @return {boolean} Whether the value was changed.
+         */
         Geotracepicker.prototype._updateValue = function() {
             var oldGeoTraceValue = $( this.element ).val(),
                 newGeoTraceValue = '',
@@ -267,9 +270,15 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 if ( !that._isValidGeopoint( geopoint ) && !( geopoint === '' && index === array.length - 1 ) ) {
                     that._markAsInvalid( index );
                 }
-                newGeoTraceValue += geopoint;
-                if ( geopoint !== '' && index !== array.length - 1 ) {
-                    newGeoTraceValue += ';';
+                //newGeoTraceValue += geopoint;
+                if ( !( geopoint === '' && index === array.length - 1 ) ) {
+                    newGeoTraceValue += geopoint;
+                    if ( index !== array.length - 1 ) {
+                        newGeoTraceValue += ';';
+                    }
+                } else {
+                    // remove trailing semi-colon
+                    newGeoTraceValue = newGeoTraceValue.substring( 0, newGeoTraceValue.lastIndexOf( ';' ) );
                 }
             } );
 
@@ -465,7 +474,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * Updates the dynamic (Maps API v3) map to show the provided coordinates (in the center), with the provided zoom level
+         * Updates the dynamic (Maps API v3) map to either show the provided coordinates (in the center), with the provided zoom level
+         * or to update any markers, polylines
          *
          * @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number} zoom zoom
@@ -502,11 +512,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             if ( !latLng ) {
                 this._updatePolyline();
                 this._updateMarkers();
-
-                //if ( this.points.length < 2 ) {
-                //    latLng = latLng || this.points[ 0 ];
-                //    this.map.setView( latLng, zoom );
-                // }
             } else {
                 this.map.setView( latLng, zoom );
             }
@@ -530,7 +535,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             }
 
             this.points.forEach( function( latLng, index ) {
-                //var color = ( index === that.currentIndex ) ? '#0033ff' : '#4e4e4e';
                 var icon = ( index === that.currentIndex ) ? placeMarkerIconActive : placeMarkerIcon;
                 if ( that._isValidLatLng( latLng ) ) {
                     coords.push( latLng );
@@ -550,15 +554,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                         that._updateInputs( latLng, 'change.bymap' );
                         that._updateMap();
                     } ) );
-
-                    /*markers.push( new EnketoCircleMarker( latLng, {
-                        color: color,
-                        fillColor: color,
-                        index: index
-                    } ).on( 'click', function( e ) {
-                        console.log( 'clicked marker', e.target );
-                        that._setCurrent( e.target.options.index );
-                    } ) );*/
                 } else {
                     console.log( 'this latLng was not considered valid', latLng );
                 }
@@ -566,12 +561,13 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
 
             console.log( 'markers to update', markers );
 
-            this.markerLayer = L.layerGroup( markers ).addTo( this.map );
-
-            // change the view to fit all the markers
-            // this is important when no polyline can be drawn (because a point is invalid)
-            //var bounds = new L.LatLngBounds( this.points );
-            this.map.fitBounds( coords );
+            if ( markers.length > 0 ) {
+                this.markerLayer = L.layerGroup( markers ).addTo( this.map );
+                // change the view to fit all the markers
+                // this is important when no polyline can be drawn (because a point is invalid)
+                //var bounds = new L.LatLngBounds( this.points );
+                this.map.fitBounds( coords );
+            }
 
             console.log( 'redrawn all markers' );
         };
@@ -643,7 +639,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
 
         /**
          * removes current point
-         * @return {[type]} [description]
          */
         Geotracepicker.prototype._removePoint = function() {
             var newIndex = this.currentIndex;
