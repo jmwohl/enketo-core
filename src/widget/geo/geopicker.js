@@ -18,7 +18,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
     function( $, Widget, configStr, L ) {
         "use strict";
 
-        var pluginName = 'geotracepicker',
+        var pluginName = 'geopicker',
             config = JSON.parse( configStr ),
             defaultZoom = 15,
             tile = config.tile || {
@@ -27,25 +27,22 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
                 },
                 "static": {
-                    "source": 'http://api.tiles.mapbox.com/v3/undp.map-6grwd0n3/{lon},{lat},{z}/{width}x{height}.png',
+                    "source": 'http://api.tiles.mapbox.com/v3/undp.map-6grwd0n3/{markers}/{lon},{lat},{z}/{width}x{height}.png',
                     "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
                 }
             },
-            placeMarkerIcon = L.divIcon( {
+            iconSingle = L.divIcon( {
+                iconSize: 24,
+                className: 'enketo-geopoint-marker'
+            } ),
+            iconMulti = L.divIcon( {
                 iconSize: 16,
                 className: 'enketo-geopoint-circle-marker'
             } ),
-            placeMarkerIconActive = L.divIcon( {
+            iconMultiActive = L.divIcon( {
                 iconSize: 16,
                 className: 'enketo-geopoint-circle-marker-active'
-            } )
-            /*,
-            EnketoCircleMarker = L.CircleMarker.extend( {
-                options: {
-                    index: null
-                }
-            } )*/
-            ;
+            } );
 
         /**
          * Geotrace widget Class
@@ -55,7 +52,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * @param {*=} e     event
          */
 
-        function Geotracepicker( element, options ) {
+        function Geopicker( element, options ) {
             var that = this;
             this.namespace = pluginName;
             // call the super class constructor
@@ -65,21 +62,22 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         }
 
         // copy the prototype functions from the Widget super class
-        Geotracepicker.prototype = Object.create( Widget.prototype );
+        Geopicker.prototype = Object.create( Widget.prototype );
 
         // ensure the constructor is the new one
-        Geotracepicker.prototype.constructor = Geotracepicker;
+        Geopicker.prototype.constructor = Geopicker;
 
         /**
          * Initializes the picker
          */
-        Geotracepicker.prototype._init = function() {
+        Geopicker.prototype._init = function() {
             var loadedVal = $( this.element ).val().trim(),
                 that = this,
                 defaultLatLng = [ 16.8164, -3.0171 ];
 
             this.mapId = Math.round( Math.random() * 10000000 );
             this.props = this._getProps();
+
             this._addDomElements();
             this.currentIndex = 0;
             this.points = [];
@@ -93,7 +91,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     } );
                 } );
             }
-
+            console.log( 'props', this.props );
             console.log( 'points', this.points );
 
             this.$widget.find( 'input:not([name="search"])' ).on( 'change change.bymap change.bysearch', function( event ) {
@@ -134,7 +132,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             this.$widget.find( '.btn-remove' ).on( 'click', function() {
                 if ( that.points.length < 2 ) {
                     that._updateInputs( [] );
-                } else if ( window.confirm( 'This will delete the current geopoint and cannot be undone. Are you sure?' ) ) {
+                } else if ( window.confirm( 'This will completely remove the current geopoint from the list of geopoints and cannot be undone. Are you sure you want to do this?' ) ) {
                     that._removePoint();
                 }
             } );
@@ -173,28 +171,38 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 this._updateMap( defaultLatLng );
             } else {
                 this._updateMap();
+                this._setCurrent( this.currentIndex );
             }
         };
 
-        Geotracepicker.prototype._getProps = function() {
-            var props = {};
-
-            props.search = !this.options.touch;
-            props.detect = !! navigator.geolocation;
-            props.map = this.options.touch !== true || ( this.options.touch === true && $( this.element ).closest( '.or-appearance-maps' ).length > 0 );
-            props.updateMapFn = ( props.map ) ? ( ( this.options.touch ) ? "_updateStaticMap" : "_updateDynamicMap" ) : null;
-
-            return props;
+        /**
+         * Gets the widget properties and features.
+         *
+         * @return {{search: boolean, detect: boolean, map: boolean, updateMapFn: string, type: string}} The widget properties object
+         */
+        Geopicker.prototype._getProps = function() {
+            var map = this.options.touch !== true || ( this.options.touch === true && $( this.element ).closest( '.or-appearance-maps' ).length > 0 );
+            return {
+                search: !this.options.touch,
+                detect: !! navigator.geolocation,
+                map: map,
+                updateMapFn: map ? ( this.options.touch ? "_updateStaticMap" : "_updateDynamicMap" ) : null,
+                type: this.element.attributes[ 'data-type-xml' ].textContent
+            };
         };
 
-        Geotracepicker.prototype._addPointBtn = function( label ) {
+        /**
+         * Adds a point button in the point navigation bar
+         * @param {string} label The label to show on the button.
+         */
+        Geopicker.prototype._addPointBtn = function( label ) {
             this.$points.find( '.addpoint' ).before( '<a href="#" class="point btn btn-default">' + label + '</a>' );
         };
 
         /**
          * Adds the DOM elements
          */
-        Geotracepicker.prototype._addDomElements = function() {
+        Geopicker.prototype._addDomElements = function() {
             var detect =
                 '<button name="geodetect" type="button" class="btn btn-default" title="detect current location" data-placement="top">' +
                 '<i class="glyphicon glyphicon-screenshot"> </i></button>',
@@ -203,11 +211,11 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     '<input class="geo ignore form-control" name="search" type="text" placeholder="search for place or address" disabled="disabled"/>' +
                     '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +
                     '</div>',
-                map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>';
+                map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>',
+                points = '<div class="points btn-group"><a href="#" class="addpoint btn btn-primary">+</a></div>';
 
             this.$widget = $(
                 '<div class="geopicker widget">' +
-                '<div class="points btn-group"><a href="#" class="addpoint btn btn-primary">+</a></div>' +
                 '<div class="search-bar no-search-input no-map"></div>' +
                 '<div class="geo-inputs">' +
                 '<label class="geo">latitude (x.y &deg;)<input class="ignore" name="lat" type="number" step="0.0001" min="-90" max="90"/></label>' +
@@ -234,12 +242,19 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 this.$widget.find( '.search-bar' ).removeClass( 'no-map' ).after( map );
                 this.$map = this.$widget.find( '.map-canvas' );
             }
+            // if points bar is required
+            if ( this.props.type !== 'geopoint' ) {
+                this.$points = $( points );
+                this.$widget.prepend( this.$points );
+            } else {
+                this.$points = $();
+            }
 
             this.$lat = this.$widget.find( '[name="lat"]' );
             this.$lng = this.$widget.find( '[name="long"]' );
             this.$alt = this.$widget.find( '[name="alt"]' );
             this.$acc = this.$widget.find( '[name="acc"]' );
-            this.$points = this.$widget.find( '.points' );
+
 
             $( this.element ).hide().after( this.$widget ).parent().addClass( 'clearfix' );
         };
@@ -247,9 +262,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         /**
          * Updates the value in the original input element.
          *
-         * @return {boolean} Whether the value was changed.
+         * @return {Boolean} Whether the value was changed.
          */
-        Geotracepicker.prototype._updateValue = function() {
+        Geopicker.prototype._updateValue = function() {
             var oldGeoTraceValue = $( this.element ).val(),
                 newGeoTraceValue = '',
                 that = this;
@@ -293,13 +308,14 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * Though this deviates from other widgets, it seems better to immediately validate a single point here
-         * in addition to what happens in the FormModel.
+         * Checks an Openrosa geopoint for validity. This function is used to provide more detailed
+         * error feedback than provided by the form controller. This can be used to pinpoint the exact
+         * invalid geopoints in a list of geopoint (the form controller only validates the total list).
          *
          * @param  {string}  geopoint [description]
          * @return {Boolean}          [description]
          */
-        Geotracepicker.prototype._isValidGeopoint = function( geopoint ) {
+        Geopicker.prototype._isValidGeopoint = function( geopoint ) {
             var coords;
 
             if ( !geopoint ) {
@@ -315,7 +331,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             );
         };
 
-        Geotracepicker.prototype._isValidLatLngList = function( latLngs ) {
+        /**
+         * Validates a list of latLng Arrays or Objects
+         * @param  {Array.((Array.<number|string>|{lat: number, long:number}))}  latLngs Array of latLng objects or arrays
+         * @return {Boolean}         Whether list is valid or not
+         */
+        Geopicker.prototype._isValidLatLngList = function( latLngs ) {
             var that = this;
 
             return latLngs.every( function( latLng, index, array ) {
@@ -323,7 +344,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             } );
         };
 
-        Geotracepicker.prototype._isValidLatLng = function( latLng ) {
+        /**
+         * Validates an individual latlng Array or Object
+         * @param  {(Array.<number|string>|{lat: number, long:number})}  latLng latLng object or array
+         * @return {Boolean}        Whether latLng is valid or not
+         */
+        Geopicker.prototype._isValidLatLng = function( latLng ) {
             console.log( 'checking validity of latLng', latLng );
             var lat, lng;
 
@@ -333,27 +359,39 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             return ( lat !== null && lng !== null && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 );
         };
 
-        Geotracepicker.prototype._markAsInvalid = function( index ) {
+        /**
+         * Marks a point as invalid in the points navigation bar
+         * @param  {number} index Index of point
+         */
+        Geopicker.prototype._markAsInvalid = function( index ) {
             this.$points.find( '.point' ).eq( index ).addClass( 'has-error' );
         };
 
-        Geotracepicker.prototype._markAsValid = function() {
+        /**
+         * Marks all points as valid in the points navigation bar
+         */
+        Geopicker.prototype._markAsValid = function() {
             this.$points.find( '.point' ).removeClass( 'has-error' );
         };
 
-        Geotracepicker.prototype._setCurrent = function( index ) {
+        /**
+         * Changes the current point in the list of points
+         */
+        Geopicker.prototype._setCurrent = function( index ) {
             this.currentIndex = index;
             this.$points.find( '.point' ).removeClass( 'active' ).eq( index ).addClass( 'active' );
             this._updateInputs( this.points[ index ], '' );
             // make sure that the current marker is marked as active
-            this._updateMarkers();
+            if ( this.props.updateMapFn === '_updateDynamicMap' ) {
+                this._updateMarkers();
+            }
             console.log( 'set current index to ', this.currentIndex );
         };
 
         /**
          * Enables geo detection using the built-in browser geoLocation functionality
          */
-        Geotracepicker.prototype._enableDetection = function() {
+        Geopicker.prototype._enableDetection = function() {
             var that = this;
             this.$detect.click( function( event ) {
                 event.preventDefault();
@@ -362,7 +400,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     //that._updateMap( );
                     that._updateInputs( [ position.coords.latitude, position.coords.longitude, position.coords.altitude, position.coords.accuracy ] );
                     // if current index is last of points, automatically create next point
-                    if ( that.currentIndex === that.points.length - 1 ) {
+                    if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
                         that.$points.find( '.addpoint' ).click();
                     }
                 } );
@@ -373,7 +411,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         /**
          * Enables search functionality using the Google Maps API v3
          */
-        Geotracepicker.prototype._enableSearch = function() {
+        Geopicker.prototype._enableSearch = function() {
             var that = this;
 
             this.$search
@@ -412,16 +450,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * Empties all inputs, sets map to 0,0, clears value in original input
+         * Determines whether map is available for manipulation.
          */
-        Geotracepicker.prototype._reset = function() {
-
-        };
-
-        /**
-         * Whether google maps are available (whether scripts have loaded).
-         */
-        Geotracepicker.prototype._dynamicMapAvailable = function() {
+        Geopicker.prototype._dynamicMapAvailable = function() {
             return !!this.map;
         };
 
@@ -430,8 +461,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          *
          * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number=} zoom zoom level
+         * @return {Function} Returns call to function
          */
-        Geotracepicker.prototype._updateMap = function( latLng, zoom ) {
+        Geopicker.prototype._updateMap = function( latLng, zoom ) {
             console.log( 'trace update map', 'latLng', latLng, 'zoom', zoom, 'points', this.points );
             if ( !this.props.map ) {
                 return;
@@ -450,51 +482,58 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * Loads a static map with placemarker. Does not use Google Maps v3 API (uses Static Maps API instead)
+         * Loads a static map. (No markers due to difficult of determining zoom level that would show all of them)
          *
          * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number} zoom zoom level
          */
-        Geotracepicker.prototype._updateStaticMap = function( latLng, zoom ) {
-            var lat, lng, width, height;
+        Geopicker.prototype._updateStaticMap = function( latLng, zoom ) {
+            var lat, lng, width, height,
+                markers = '';
 
             if ( !this.props.map ) {
                 return;
             }
+
+            latLng = latLng || this.points[ 0 ] || defaultLatLng;
 
             lat = latLng[ 0 ] || latLng.lat || 0;
             lng = latLng[ 1 ] || latLng.lng || 0;
             width = Math.round( this.$map.width() );
             height = Math.round( this.$map.height() );
 
-            this.$map.empty().append(
-                '<img src="' + tile[ "static" ][ "source" ].replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>' +
+            this.$map.addClass( 'static' ).empty().append(
+                '<img src="' + tile[ "static" ][ "source" ].replace( '{markers}/', '' ).replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>' +
                 '<div class="attribution">' + tile[ "static" ][ "attribution" ] + '</div>'
             );
         };
 
         /**
-         * Updates the dynamic (Maps API v3) map to either show the provided coordinates (in the center), with the provided zoom level
-         * or to update any markers, polylines
+         * Updates the dynamic map to either show the provided coordinates (in the center), with the provided zoom level
+         * or updates any markers, polylines, polygons
          *
          * @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number} zoom zoom
          */
-        Geotracepicker.prototype._updateDynamicMap = function( latLng, zoom ) {
+        Geopicker.prototype._updateDynamicMap = function( latLng, zoom ) {
             var that = this;
 
+            console.log( 'dynamic map to be updated with latLng', latLng );
             if ( !this.map ) {
                 console.log( 'no map yet, creating it' );
                 this.map = L.map( 'map' + this.mapId )
                     .on( 'click', function( e ) {
+                        console.log( 'clicked on map', e.latlng );
                         // do nothing if the field has a current marker
                         // instead the user will have to drag
-                        if ( !that.$lat.val() || !that.$lng.val() ) {
+                        if ( !that.$lat.val() || !that.$lng.val() || that.props.type === 'geopoint' ) {
                             // that._points[that.currentIndex] = e.latLng;
                             that._updateInputs( e.latlng, 'change.bymap' );
-                            that._updateMap();
+                            //console.log( 'going to call update map' );
+                            //that._updateMap();
                             // if current index is last of points, automatically create next point
-                            if ( that.currentIndex === that.points.length - 1 ) {
+                            // except if type = geopoint
+                            if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
                                 that.$points.find( '.addpoint' ).click();
                             }
                         }
@@ -513,29 +552,31 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 this._updatePolyline();
                 this._updateMarkers();
             } else {
+                console.log( 'setting map view with center', latLng );
                 this.map.setView( latLng, zoom );
             }
-
         };
 
-        Geotracepicker.prototype._updateMarkers = function() {
+        /**
+         * Updates the markers on the dynamic map from the current list of points.
+         */
+        Geopicker.prototype._updateMarkers = function() {
             var coords = [],
                 markers = [],
                 that = this;
 
             console.log( 'updateing markers', this.points );
 
-            if ( this.points.length < 2 && this.points[ 0 ].join() === '' ) {
-                this.markers = null;
-                return;
-            }
-
             if ( this.markerLayer ) {
                 this.markerLayer.clearLayers();
             }
 
+            if ( this.points.length < 2 && this.points[ 0 ].join() === '' ) {
+                return;
+            }
+
             this.points.forEach( function( latLng, index ) {
-                var icon = ( index === that.currentIndex ) ? placeMarkerIconActive : placeMarkerIcon;
+                var icon = that.props.type === 'geopoint' ? iconSingle : ( index === that.currentIndex ? iconMultiActive : iconMulti );
                 if ( that._isValidLatLng( latLng ) ) {
                     coords.push( latLng );
                     markers.push( L.marker( latLng, {
@@ -565,18 +606,28 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 this.markerLayer = L.layerGroup( markers ).addTo( this.map );
                 // change the view to fit all the markers
                 // this is important when no polyline can be drawn (because a point is invalid)
-                //var bounds = new L.LatLngBounds( this.points );
-                this.map.fitBounds( coords );
+                // DISABLED except for geopoint, CAUSING ISSUE WITH INCORRECT MARKER PLACEMENT
+                if ( this.props.type === 'geopoint' ) {
+                    this.map.fitBounds( coords );
+                }
             }
 
             console.log( 'redrawn all markers' );
         };
 
-        Geotracepicker.prototype._updatePolyline = function() {
+        /**
+         * Updates the polyline on the dynamic map from the current list of points
+         */
+        Geopicker.prototype._updatePolyline = function() {
             var polylinePoints;
+
+            if ( this.props.type === 'geopoint' ) {
+                return;
+            }
+
             console.log( 'updating polyline' );
             if ( this.points.length < 2 || !this._isValidLatLngList( this.points ) ) {
-                // to prevent quirky line remainder when all points are deleted, redraw first
+                // remove quirky line remainder
                 if ( this.polyline && this.map ) {
                     this.map.removeLayer( this.polyline );
                 }
@@ -599,37 +650,11 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * Moves the existing marker to the provided coordinates or places a new one in the center of the map
-         *
-         * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
+         * Edits a point in the list of points
+         * @param  {Array.<number>|{lat: number, lng: number, alt: number, acc: number}} latLng LatLng object or array
+         * @return {Boolean]}        Whether point changed.
          */
-        Geotracepicker.prototype._placeMarker = function( latLng ) {
-            var that = this;
-
-            /*if ( !this._dynamicMapAvailable() ) {
-                return;
-            }
-
-            latLng = latLng || this.map.getCenter();
-
-            if ( !this.marker ) {
-                this.marker = L.marker( latLng, {
-                    icon: placeMarkerIcon,
-                    draggable: true
-                } ).addTo( this.map )
-                    .on( 'dragend', function( event ) {
-                        var latLng = event.target.getLatLng();
-                        that._updateInputs( latLng, 'change.bymap' );
-                        that._updateMap( latLng );
-                    } );
-            } else {
-                this.marker.setLatLng( latLng );
-            }
-*/
-            //CENTRALIZE???
-        };
-
-        Geotracepicker.prototype._editPoint = function( latLng ) {
+        Geopicker.prototype._editPoint = function( latLng ) {
             var oldVal = this.points[ this.currentIndex ].join();
             this.points[ this.currentIndex ] = latLng;
             // this comparison is not completely accurate
@@ -638,9 +663,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         };
 
         /**
-         * removes current point
+         * Removes the current point
          */
-        Geotracepicker.prototype._removePoint = function() {
+        Geopicker.prototype._removePoint = function() {
             var newIndex = this.currentIndex;
             this.points.splice( this.currentIndex, 1 );
             this._updateValue();
@@ -659,7 +684,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * @param  @param  {Array.<number>|{lat: number, lng: number, alt: number, acc: number}} coords latitude, longitude, altitude and accuracy
          * @param  {string=} ev  [description]
          */
-        Geotracepicker.prototype._updateInputs = function( coords, ev ) {
+        Geopicker.prototype._updateInputs = function( coords, ev ) {
             var lat = coords[ 0 ] || coords.lat || '',
                 lng = coords[ 1 ] || coords.lng || '',
                 alt = coords[ 2 ] || coords.alt || '',
@@ -673,12 +698,18 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             this.$acc.val( Math.round( acc * 10 ) / 10 || '' ).trigger( ev );
         };
 
-        Geotracepicker.prototype.disable = function() {
+        /**
+         * Disables the widget
+         */
+        Geopicker.prototype.disable = function() {
             this.$map.hide();
             this.$widget.find( '.btn' ).addClass( 'disabled' );
         };
 
-        Geotracepicker.prototype.enable = function() {
+        /**
+         * Enables a disabled widget
+         */
+        Geopicker.prototype.enable = function() {
             this.$map.show();
             this.$widget.find( '.btn' ).removeClass( 'disabled' );
         };
@@ -693,7 +724,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 options = options || {};
 
                 if ( !data && typeof options === 'object' ) {
-                    $this.data( pluginName, ( data = new Geotracepicker( this, options, event ) ) );
+                    $this.data( pluginName, ( data = new Geopicker( this, options, event ) ) );
                 } else if ( data && typeof options == 'string' ) {
                     //pass the context, used for destroy() as this method is called on a cloned widget
                     data[ options ]( this );

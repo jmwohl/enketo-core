@@ -3,8 +3,7 @@
         "enketo-widget/note/notewidget",
         "enketo-widget/select-desktop/selectpicker",
         "enketo-widget/select-mobile/selectpicker",
-        "enketo-widget/geopoint/geopointpicker",
-        "enketo-widget/geotrace/geotracepicker",
+        "enketo-widget/geo/geopicker",
         "enketo-widget/table/tablewidget",
         "enketo-widget/radio/radiopicker",
         "enketo-widget/date/datepicker-extended",
@@ -20,7 +19,7 @@
             "attribution": "Map data &copy; <a target=\"_blank\" href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
         },
         "static": {
-            "source": "https://api.tiles.mapbox.com/v3/examples.map-vyofok3q/{lon},{lat},{z}/{width}x{height}.png",
+            "source": "https://api.tiles.mapbox.com/v3/examples.map-vyofok3q/{markers}/{lon},{lat},{z}/{width}x{height}.png",
             "attribution": "Map data &copy; <a target=\"_blank\" href=\"http://openstreetmap.org\">OpenStreetMap</a> contributors"
         }
     }
