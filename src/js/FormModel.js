@@ -468,7 +468,17 @@ define( [ 'xpath', 'jquery', 'enketo-js/plugins', 'enketo-js/extend', 'jquery.xp
                 validate: function( x ) {
                     var geopoints = x.toString().split( ';' );
                     return geopoints.length >= 2 && geopoints.every( function( geopoint ) {
-                        console.log( 'validating:', geopoint );
+                        return new Nodeset().types.geopoint.validate( geopoint );
+                    } );
+                },
+                convert: function( x ) {
+                    return x.toString().trim();
+                }
+            },
+            'geoshape': {
+                validate: function( x ) {
+                    var geopoints = x.toString().split( ';' );
+                    return geopoints.length >= 4 && ( geopoints[ 0 ] === geopoints[ geopoints.length - 1 ] ) && geopoints.every( function( geopoint ) {
                         return new Nodeset().types.geopoint.validate( geopoint );
                     } );
                 },
