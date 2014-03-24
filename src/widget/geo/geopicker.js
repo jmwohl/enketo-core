@@ -584,7 +584,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             if ( !latLng ) {
                 this._updatePolyline();
                 this._updateMarkers();
-                if ( this.points.length === 0 ) {
+                if ( this.points.length === 1 && this.points[ 0 ].toString() === '' ) {
                     this.map.setView( this.lastLatLng, zoom );
                 }
             } else {
