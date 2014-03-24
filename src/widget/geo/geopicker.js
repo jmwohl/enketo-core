@@ -131,6 +131,23 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 }
             } );
 
+            this.$map.find( '.show-map-btn' ).on( 'click', function() {
+                that.$widget.find( '.search-bar' ).removeClass( 'hide-search' );
+                that.$widget.addClass( 'full-screen' );
+                that._updateMap();
+                return false;
+            } );
+
+            this.$widget.find( '.hide-map-btn' ).on( 'click', function() {
+                that.$widget.find( '.search-bar' ).addClass( 'hide-search' );
+                that.$widget.removeClass( 'full-screen' ).find( '.map-canvas' ).removeClass( 'leaflet-container' );
+                if ( that.map ) {
+                    that.map.remove();
+                    that.map = null;
+                }
+                return false;
+            } );
+
             this.$widget.on( 'focus blur', 'input', function( event ) {
                 $( that.element ).trigger( event.type );
             } );
@@ -177,11 +194,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         Geopicker.prototype._getProps = function() {
             var map = this.options.touch !== true || ( this.options.touch === true && $( this.element ).closest( '.or-appearance-maps' ).length > 0 );
             return {
-                search: !this.options.touch,
                 detect: !! navigator.geolocation,
                 map: map,
-                updateMapFn: map ? ( this.options.touch ? "_updateStaticMap" : "_updateDynamicMap" ) : null,
-                type: this.element.attributes[ 'data-type-xml' ].textContent
+                search: map,
+                //updateMapFn: map ? ( this.options.touch ? "_updateStaticMap" : "_updateDynamicMap" ) : null,
+                type: this.element.attributes[ 'data-type-xml' ].textContent,
+                touch: this.options.touch
             };
         };
 
@@ -197,21 +215,22 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * Adds the DOM elements
          */
         Geopicker.prototype._addDomElements = function() {
-            var detect =
-                '<button name="geodetect" type="button" class="btn btn-default" title="detect current location" data-placement="top">' +
-                '<i class="glyphicon glyphicon-screenshot"> </i></button>',
-                search =
-                    '<div class="input-group">' +
-                    '<input class="geo ignore form-control" name="search" type="text" placeholder="search for place or address" disabled="disabled"/>' +
-                    '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +
-                    '</div>',
-                map = '<div  class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div>',
+            var map = '<div class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div></div>',
                 points = '<div class="points btn-group"><button class="addpoint btn btn-default"><span class="glyphicon glyphicon-plus"> </span></button></div>',
-                close = '<button class="close-chain btn btn-success"><span class="glyphicon glyphicon-link"> </span></button>';
+                close = '<button class="close-chain btn btn-success"><span class="glyphicon glyphicon-link"> </span></button>',
+                mapBtn = '<a href="#" class="show-map-btn btn btn-primary">Map</a>';
 
             this.$widget = $(
                 '<div class="geopicker widget">' +
-                '<div class="search-bar no-search-input no-map"></div>' +
+                '<div class="search-bar hide-search no-map no-detect">' +
+                '<a href="#" class="hide-map-btn btn btn-primary">Form</a>' +
+                '<button name="geodetect" type="button" class="btn btn-default" title="detect current location" data-placement="top">' +
+                '<i class="glyphicon glyphicon-screenshot"> </i></button>' +
+                '<div class="input-group">' +
+                '<input class="geo ignore" name="search" type="text" placeholder="search for place or address" disabled="disabled"/>' +
+                '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +
+                '</div>' +
+                '</div>' +
                 '<div class="geo-inputs">' +
                 '<label class="geo">latitude (x.y &deg;)<input class="ignore" name="lat" type="number" step="0.0001" min="-90" max="90"/></label>' +
                 '<label class="geo">longitude (x.y &deg;)<input class="ignore" name="long" type="number" step="0.0001" min="-180" max="180"/></label>' +
@@ -222,21 +241,31 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 '</div>'
             );
 
-            // if geodetection is supported, add the button
+            // add the detection button
             if ( this.props.detect ) {
-                this.$widget.find( '.search-bar' ).append( detect );
+                this.$widget.find( '.search-bar' ).removeClass( 'no-detect' );
                 this.$detect = this.$widget.find( 'button[name="geodetect"]' );
             }
-            // if not on a mobile device, add the search field
-            if ( this.props.search ) {
-                this.$widget.find( '.search-bar' ).removeClass( 'no-search-input' ).append( search );
-                this.$search = this.$widget.find( '[name="search"]' );
-            }
-            // if not on a mobile device or specifically requested, add the map canvas
+
+            this.$search = this.$widget.find( '[name="search"]' );
+
+            // add the map canvas
             if ( this.props.map ) {
                 this.$widget.find( '.search-bar' ).removeClass( 'no-map' ).after( map );
                 this.$map = this.$widget.find( '.map-canvas' );
+            } else {
+                this.$map = $();
             }
+
+            // touchscreen maps
+            if ( this.props.touch && this.props.map ) {
+                this.$map.append( mapBtn );
+            }
+
+            if ( !this.props.touch ) {
+                this.$widget.find( '.search-bar' ).removeClass( 'hide-search' );
+            }
+
             // if points bar is required
             if ( this.props.type !== 'geopoint' ) {
                 this.$points = $( points );
@@ -380,7 +409,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             this.$points.find( '.point' ).removeClass( 'active' ).eq( index ).addClass( 'active' );
             this._updateInputs( this.points[ index ], '' );
             // make sure that the current marker is marked as active
-            if ( this.props.updateMapFn === '_updateDynamicMap' ) {
+            if ( !this.props.touch || this._inFullScreenMode() ) {
                 this._updateMarkers();
             }
             console.log( 'set current index to ', this.currentIndex );
@@ -454,6 +483,10 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             return !!this.map;
         };
 
+        Geopicker.prototype._inFullScreenMode = function() {
+            return this.$widget.hasClass( 'full-screen' );
+        };
+
         /**
          * Calls the appropriate map update function.
          *
@@ -476,8 +509,16 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 }
             }
 
-            return this[ this.props.updateMapFn ]( latLng, zoom );
+            // serves to remember last requested map coordinates to initiate map in mobile view
+            this.lastLatLng = latLng || this.lastLatLng || null;
+            console.log( 'stored lastLatLng', this.lastLatLng );
+
+            if ( !this.props.touch || this._inFullScreenMode() ) {
+                this._updateDynamicMap( latLng, zoom );
+            }
         };
+
+
 
         /**
          * Loads a static map. (No markers due to difficult of determining zoom level that would show all of them)
@@ -485,7 +526,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * @param  @param  {Array.<number>|{lat: number, lng: number}} latLng  latitude and longitude coordinates
          * @param  {number} zoom zoom level
          */
-        Geopicker.prototype._updateStaticMap = function( latLng, zoom ) {
+        /*Geopicker.prototype._updateStaticMap = function( latLng, zoom ) {
             var lat, lng, width, height,
                 markers = '';
 
@@ -504,7 +545,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 '<img src="' + tile[ "static" ][ "source" ].replace( '{markers}/', '' ).replace( '{lat}', lat ).replace( '{lon}', lng ).replace( '{z}', defaultZoom ).replace( '{width}', width ).replace( '{height}', height ) + '"/>' +
                 '<div class="attribution">' + tile[ "static" ][ "attribution" ] + '</div>'
             );
-        };
+        };*/
 
         /**
          * Updates the dynamic map to either show the provided coordinates (in the center), with the provided zoom level
@@ -549,6 +590,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             if ( !latLng ) {
                 this._updatePolyline();
                 this._updateMarkers();
+                if ( this.points.length === 0 ) {
+                    this.map.setView( this.lastLatLng, zoom );
+                }
             } else {
                 console.log( 'setting map view with center', latLng );
                 this.map.setView( latLng, zoom );

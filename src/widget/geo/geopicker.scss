@@ -1,7 +1,7 @@
 /* assumes the geopointpicker has already been included */
 .points {
     width: 100%;
-    margin-bottom: 15px;
+    padding-bottom: 15px;
 }
 
 .point {
@@ -79,15 +79,15 @@
             padding-left: 0;
             border-left: none;
         }
-        img {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
     }
-    .search-bar .form-control {
+    .search-bar {
         margin-top: 0;
+        [name="search"] {
+            margin: 0 !important;
+        }
+        .hide-map-btn {
+            display: none;
+        }
     }
     button {
         height: 34px;
@@ -100,9 +100,12 @@
             width: $detect-width;
         }
     }
-    .no-search-input {
+    .hide-search {
         &.no-map {
             border-left: none;
+        }
+        .input-group {
+            display: none;
         }
         button[name="geodetect"] {
             float: none;
@@ -175,7 +178,7 @@
         border-radius: 3px;
         margin-top: 10px;
         height: $map-height;
-        position: relative;
+        //position: relative;
         cursor: crosshair;
         img {
             max-width: none;
@@ -187,7 +190,62 @@
             font-size: 10px;
         }
         &.static {
-        	cursor: not-allowed;
+            cursor: not-allowed;
+        }
+        .show-map-btn {
+            width: 150px;
+            margin: 120px auto;
+            display: block;
+            color: white;
+        }
+    }
+    &.full-screen {
+        @include display-flex;
+        @include flex-direction(column);
+        @include flex-wrap(nowrap);
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10000;
+        background: white;
+        margin-top: 0;
+        padding-top: 25px;
+        .geo-inputs {
+            display: none;
+        }
+        .map-canvas-wrapper {
+            float: none;
+            width: 100%;
+            padding: 0 25px 25px 25px;
+            @include flex(1);
+            @include display-flex;
+            @include flex-direction(column);
+            @include flex-wrap(nowrap);
+            // have to use flex again to get map canvas to stretch to 100% height
+            .map-canvas {
+                height: 100%;
+                @include flex(1);
+            }
+            .show-map-btn {
+                display: none;
+            }
+        }
+        .search-bar {
+            width: 100%;
+            padding: 0 25px 25px 25px;
+            &.hide-search {
+                display: block;
+            }
+            .hide-map-btn {
+                display: block;
+                float: right;
+                margin-left: 20px;
+            }
+        }
+        .points {
+            padding: 0 25px 25px 25px;
         }
     }
 }
