@@ -21,7 +21,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         var pluginName = 'geopicker',
             config = JSON.parse( configStr ),
             defaultZoom = 15,
-    tile = config.tile || {
+            tile = config.tile || {
                 "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
                 "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
             },
