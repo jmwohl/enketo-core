@@ -21,15 +21,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         var pluginName = 'geopicker',
             config = JSON.parse( configStr ),
             defaultZoom = 15,
-            tile = config.tile || {
-                "dynamic": {
-                    "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
-                    "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
-                },
-                "static": {
-                    "source": 'http://api.tiles.mapbox.com/v3/undp.map-6grwd0n3/{markers}/{lon},{lat},{z}/{width}x{height}.png',
-                    "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
-                }
+    tile = config.tile || {
+                "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
+                "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
             },
             iconSingle = L.divIcon( {
                 iconSize: 24,
@@ -578,8 +572,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                         }
                     } );
 
-                L.tileLayer( tile[ "dynamic" ][ "source" ], {
-                    attribution: tile[ "dynamic" ][ "attribution" ],
+                L.tileLayer( tile[ "source" ], {
+                    attribution: tile[ "attribution" ],
                     maxZoom: 18
                 } ).addTo( this.map );
 
