@@ -20,6 +20,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
 
         var pluginName = 'geopicker',
             config = JSON.parse( configStr ),
+            defaultView = [ 39.7334, -104.9926 ],
             defaultZoom = 15,
             tile = config.tile || {
                 "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
@@ -506,7 +507,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             }
 
             // serves to remember last requested map coordinates to initiate map in mobile view
-            this.lastLatLng = latLng || this.lastLatLng || null;
+            this.lastLatLng = latLng || this.lastLatLng || defaultView;
             console.log( 'stored lastLatLng', this.lastLatLng );
 
             if ( !this.props.touch || this._inFullScreenMode() ) {
