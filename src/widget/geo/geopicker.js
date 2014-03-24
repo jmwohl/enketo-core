@@ -138,6 +138,8 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 if ( that.map ) {
                     that.map.remove();
                     that.map = null;
+                    that.polygon = null;
+                    that.polyline = null;
                 }
                 return false;
             } );
