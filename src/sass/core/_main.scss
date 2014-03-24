@@ -288,7 +288,7 @@ legend {
         }
     }
     input:not([type="radio"]):not([type="checkbox"]), textarea, select {
-        @include border-radius(2px);
+        //@include border-radius(2px);
         margin: 10px 0 10px 0;
         color: #104b66;
     }

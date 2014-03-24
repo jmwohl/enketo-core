@@ -215,14 +215,14 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
             var map = '<div class="map-canvas-wrapper"><div class=map-canvas id="map' + this.mapId + '"></div></div>',
                 points = '<div class="points btn-group"><button class="addpoint btn btn-default"><span class="glyphicon glyphicon-plus"> </span></button></div>',
                 close = '<button class="close-chain btn btn-success"><span class="glyphicon glyphicon-link"> </span></button>',
-                mapBtn = '<a href="#" class="show-map-btn btn btn-primary">Map</a>';
+                mapBtn = '<a href="#" class="show-map-btn btn btn-default">Map</a>';
 
             this.$widget = $(
                 '<div class="geopicker widget">' +
                 '<div class="search-bar hide-search no-map no-detect">' +
-                '<a href="#" class="hide-map-btn btn btn-primary">Form</a>' +
+                '<a href="#" class="hide-map-btn btn btn-default"><span class="glyphicon glyphicon-arrow-left"> </span></a>' +
                 '<button name="geodetect" type="button" class="btn btn-default" title="detect current location" data-placement="top">' +
-                '<i class="glyphicon glyphicon-screenshot"> </i></button>' +
+                '<span class="glyphicon glyphicon-screenshot"> </span></button>' +
                 '<div class="input-group">' +
                 '<input class="geo ignore" name="search" type="text" placeholder="search for place or address" disabled="disabled"/>' +
                 '<span class="input-group-btn"><button class="btn btn-default"><i class="glyphicon glyphicon-search"> </i></button></span>' +

@@ -89,7 +89,7 @@
             display: none;
         }
     }
-    button {
+    .btn {
         height: 34px;
         padding-bottom: 4px;
         &[name="geodetect"] {
@@ -196,7 +196,7 @@
             width: 150px;
             margin: 120px auto;
             display: block;
-            color: white;
+            //color: white;
         }
     }
     &.full-screen {
@@ -240,8 +240,14 @@
             }
             .hide-map-btn {
                 display: block;
-                float: right;
-                margin-left: 20px;
+                float: left;
+                width: 70px;
+                height: 34px;
+                margin-right: 15px;
+            }
+            [name="geodetect"] {
+            	width: 70px;
+            	margin-left: 15px;
             }
         }
         .points {
