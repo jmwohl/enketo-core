@@ -416,7 +416,10 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
          * Enables geo detection using the built-in browser geoLocation functionality
          */
         Geopicker.prototype._enableDetection = function() {
-            var that = this;
+            var that = this,
+                options = {
+                    enableHighAccuracy: true
+                };
             this.$detect.click( function( event ) {
                 event.preventDefault();
                 navigator.geolocation.getCurrentPosition( function( position ) {
@@ -427,7 +430,9 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
                         that._addPoint();
                     }
-                } );
+                }, function() {
+                    console.error( 'error occurred trying to obtain position' );
+                }, options );
                 return false;
             } );
         };
