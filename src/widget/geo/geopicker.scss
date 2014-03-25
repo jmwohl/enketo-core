@@ -103,7 +103,7 @@
         &.active {
             @extend .enketo-geopoint-circle-marker-active;
         }
-        &.has-error {
+        &.has-error:not(.active) {
             border: 1px solid #a94442;
             background: #F2DEDE;
             opacity: 1;

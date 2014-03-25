@@ -696,7 +696,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 this.markerLayer = L.layerGroup( markers ).addTo( this.map );
                 // change the view to fit all the markers
                 // don't use this for multiple markers, it messed up map clicks to place points
-                if ( this.points.length === 1 ) {
+                if ( this.points.length === 1 || !this._isValidLatLngList( this.points ) ) {
                     this.map.fitBounds( coords );
                 }
             }
