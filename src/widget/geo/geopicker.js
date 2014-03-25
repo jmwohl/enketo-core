@@ -87,8 +87,6 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     } );
                 } );
             }
-            console.log( 'props', this.props );
-            console.log( 'points', this.points );
 
             this.$widget.find( 'input:not([name="search"])' ).on( 'change change.bymap change.bysearch', function( event ) {
                 var lat = that.$lat.val() ? Number( that.$lat.val() ) : "",
@@ -598,17 +596,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     .on( 'click', function( e ) {
                         console.log( 'clicked on map', e.latlng );
                         // do nothing if the field has a current marker
-                        // instead the user will have to drag
+                        // instead the user will have to drag to change it by map
                         if ( !that.$lat.val() || !that.$lng.val() || that.props.type === 'geopoint' ) {
-                            // that._points[that.currentIndex] = e.latLng;
                             that._updateInputs( e.latlng, 'change.bymap' );
-                            //console.log( 'going to call update map' );
-                            //that._updateMap();
-                            // if current index is last of points, automatically create next point
-                            // except if type = geopoint
-                            if ( that.currentIndex === that.points.length - 1 && that.props.type !== 'geopoint' ) {
-                                that._addPoint();
-                            }
+                        } else if ( that.$lat.val() && that.$lng.val() && that.props.type !== 'geopoint' ) {
+                            that._addPoint();
+                            that._updateInputs( e.latlng, 'change.bymap' );
                         }
                     } );
 
@@ -663,25 +656,35 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 if ( that._isValidLatLng( latLng ) ) {
                     coords.push( latLng );
                     markers.push( L.marker( latLng, {
-                        icon: icon,
-                        clickable: true,
-                        draggable: true,
-                        alt: index,
-                        opacity: 0.9
-                    } ).on( 'click', function( e ) {
-                        console.log( 'clicked marker', e );
-                        if ( e.target.options.alt === 0 && that.props.type === 'geoshape' ) {
-                            that._closePolygon();
-                        } else {
+                            icon: icon,
+                            clickable: true,
+                            draggable: true,
+                            alt: index,
+                            opacity: 0.9
+                        } ).on( 'click', function( e ) {
+                            console.log( 'clicked marker', e );
+                            if ( e.target.options.alt === 0 && that.props.type === 'geoshape' ) {
+                                that._closePolygon();
+                            } else {
+                                that._setCurrent( e.target.options.alt );
+                            }
+                        } ).on( 'dragend', function( e ) {
+                            var latLng = e.target.getLatLng();
+                            // first set the current index the point dragged
                             that._setCurrent( e.target.options.alt );
+                            that._updateInputs( latLng, 'change.bymap' );
+                            that._updateMap();
+                        } )
+                        /*.on( 'mouseover', function( e ) {
+                        console.log( 'mousover!', e );
+                        if ( e.target.options.alt === 0 && that.props.type === 'geoshape' ) {
+                            var popup = L.popup()
+                                .setLatLng( e.latlng )
+                                .setContent( 'click point to close the shape' )
+                                .openOn( that.map );
                         }
-                    } ).on( 'dragend', function( e ) {
-                        var latLng = e.target.getLatLng();
-                        // first set the current index the point dragged
-                        that._setCurrent( e.target.options.alt );
-                        that._updateInputs( latLng, 'change.bymap' );
-                        that._updateMap();
-                    } ) );
+                    } )*/
+                    );
                 } else {
                     console.log( 'this latLng was not considered valid', latLng );
                 }
