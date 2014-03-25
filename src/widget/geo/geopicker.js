@@ -26,6 +26,7 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                 "source": 'http://{s}.tiles.mapbox.com/v3/undp.map-6grwd0n3/{z}/{x}/{y}.png',
                 "attribution": 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
             },
+            searchSource = "https://maps.googleapis.com/maps/api/geocode/json?address={address}&sensor=true&key={api_key}",
             iconSingle = L.divIcon( {
                 iconSize: 24,
                 className: 'enketo-geopoint-marker'
@@ -443,6 +444,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
         Geopicker.prototype._enableSearch = function() {
             var that = this;
 
+            if ( config[ 'google_api_key' ] ) {
+                searchSource = searchSource.replace( '{api_key}', config[ 'google_api_key' ] );
+            } else {
+                searchSource = searchSource.replace( '&key={api_key}', '' );
+            }
+
             this.$search
                 .prop( 'disabled', false )
                 .on( 'change', function( event ) {
@@ -450,13 +457,12 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                     event.stopImmediatePropagation();
 
                     if ( address ) {
-                        $.get( "http://nominatim.openstreetmap.org/search/" + address + "?format=json", function( response ) {
-                            var location = response[ 0 ] || null;
-                            if ( location && location.lat && location.lon ) {
-                                console.log( 'showing search result on map' );
-                                //that._placeMarker( [ location.lat, location.lon ] );
-                                that._updateMap( [ location.lat, location.lon ], defaultZoom );
-                                //that._updateInputs( [ location.lat, location.lon ], 'change.bysearch' );
+                        address = address.split( /\s+/ ).join( '+' );
+                        $.get( searchSource.replace( '{address}', address ), function( response ) {
+                            var location;
+                            if ( response.results && response.results.length > 0 && response.results[ 0 ].geometry && response.results[ 0 ].geometry.location ) {
+                                location = response.results[ 0 ].geometry.location;
+                                that._updateMap( [ location.lat, location.lng ], defaultZoom );
                                 that.$search.closest( '.input-group' ).removeClass( 'has-error' );
                             } else {
                                 //TODO: add error message
@@ -472,6 +478,26 @@ define( [ 'jquery', 'enketo-js/Widget', 'text!enketo-config', 'leaflet' ],
                             .always( function() {
 
                             } );
+                        /*$.get( "http://nominatim.openstreetmap.org/search/" + address + "?format=json", function( response ) {
+                            var location = response[ 0 ] || null;
+                            if ( location && location.lat && location.lon ) {
+                                that._updateMap( [ location.lat, location.lon ], defaultZoom );
+                                that.$search.closest( '.input-group' ).removeClass( 'has-error' );
+                            } else {
+                                //TODO: add error message
+                                that.$search.closest( '.input-group' ).addClass( 'has-error' );
+                                console.log( "Location '" + address + "' not found" );
+                            }
+                        }, 'json' )
+                            .fail( function() {
+                                //TODO: add error message
+                                that.$search.closest( '.input-group' ).addClass( 'has-error' );
+                                console.log( "Error. Geocoding service may not be available or app is offline" );
+                            } )
+                            .always( function() {
+
+                            } );
+                        */
                     } else {
 
                     }
