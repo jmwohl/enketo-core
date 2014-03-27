@@ -1518,9 +1518,9 @@ define( [ 'enketo-js/FormModel', 'enketo-js/widgets', 'jquery', 'enketo-js/plugi
                             case 'deviceid':
                                 response = readCookie( '__enketo_meta_deviceid' );
                                 break;
-                            case 'username':
-                                response = readCookie( '__enketo_meta_uid' );
-                                break;
+                                //case 'username':
+                                //    response = readCookie( '__enketo_meta_uid' );
+                                //    break;
                             default:
                                 response = noSupportMsg;
                                 break;
